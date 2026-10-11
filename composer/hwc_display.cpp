@@ -55,6 +55,10 @@
 #include <hardware/display_defs.h>
 #endif
 
+#ifdef UDFPS_ZPOS
+#include <display/drm/sde_drm.h>
+#endif
+
 #define __CLASS__ "HWCDisplay"
 
 using aidl::android::hardware::graphics::common::StandardMetadataType;
@@ -704,9 +708,6 @@ void HWCDisplay::BuildLayerStack() {
     if (hwc_layer->IsFodPressed()) {
       layer->flags.fod_pressed = true;
       layer_stack_.flags.fod_pressed_present = true;
-    } else {
-      layer->flags.fod_pressed = false;
-      layer_stack_.flags.fod_pressed_present = false;
     }
 #endif
 
@@ -899,8 +900,13 @@ HWC2::Error HWCDisplay::SetLayerZOrder(hwc2_layer_t layer_id, uint32_t z) {
   bool layer_on_display = false;
   for (auto current = z_range.first; current != z_range.second; ++current) {
     if (*current == layer) {
-      if ((*current)->GetZ() == z) {
-        // Don't change anything if the Z hasn't changed
+      bool state_unchanged = (*current)->GetZ() == z;
+#ifdef UDFPS_ZPOS
+      state_unchanged = (*current)->GetZ() == (z & ~FOD_PRESSED_LAYER_ZORDER) &&
+                        (*current)->IsFodPressed() == bool(z & FOD_PRESSED_LAYER_ZORDER);
+#endif
+      if (state_unchanged) {
+        // Both the sort key and the pressed state must be unchanged.
         return HWC2::Error::None;
       }
       current = layer_set_.erase(current);
